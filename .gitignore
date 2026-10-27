@@ -1,0 +1,18 @@
+__pycache__/
+*.pyc
+MUJOCO_LOG.TXT
+
+# training outputs: keep only the final model (checkpoint 21.5M) + its normalization stats
+runs/**/tb/
+runs/**/final_model.zip
+runs/**/vecnormalize.pkl
+runs/**/checkpoints/*
+!runs/ppo_main/checkpoints/ppo_21500000_steps.zip
+!runs/ppo_main/checkpoints/vecnormalize_21500000.pkl
+runs/test/
+
+# large media: README uses results/demo.gif
+results/*.mp4
+results/demo_*.gif
+results/*_500000*
+results/*test*

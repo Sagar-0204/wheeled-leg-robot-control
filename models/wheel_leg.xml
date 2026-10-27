@@ -1,0 +1,111 @@
+<!--
+  Wheel-legged humanoid lower body (hips and below)
+  ------------------------------------------------
+  Frame: x forward, y left, z up.
+  Per leg: hip pitch, knee pitch (position-controlled), driven wheel (torque-controlled).
+  The pelvis carries an extra "upper_body" payload that stands in for the missing torso;
+  its mass and CoM height are randomized during RL training.
+
+  Leg kinematics: with hip = +q and knee = -2q, the wheel sits directly below the hip,
+  hip height above axle = (L_thigh + L_shank) * cos(q).
+-->
+<mujoco model="wheel_leg_lower_body">
+  <compiler angle="radian" autolimits="true"/>
+  <option timestep="0.002" integrator="implicitfast" gravity="0 0 -9.81"/>
+
+  <default>
+    <joint damping="0.1" armature="0.01"/>
+    <!-- body links: collide with the floor only (detect falls), never with each other -->
+    <geom contype="0" conaffinity="1" friction="0.8 0.02 0.001" rgba="0.75 0.75 0.8 1"/>
+    <default class="wheel">
+      <geom type="cylinder" size="0.08 0.02" zaxis="0 1 0" contype="1" conaffinity="0"
+            friction="1.0 0.02 0.001" condim="3" rgba="0.15 0.15 0.15 1"/>
+      <joint damping="0.01" armature="0.005"/>
+    </default>
+    <default class="leg_servo">
+      <!-- PD servo inside the sim: the RL policy outputs target joint angles -->
+      <position kp="150" kv="4" forcerange="-60 60"/>
+    </default>
+  </default>
+
+  <visual>
+    <global offwidth="1280" offheight="720"/>
+  </visual>
+
+  <asset>
+    <texture name="grid" type="2d" builtin="checker" width="512" height="512"
+             rgb1="0.25 0.3 0.35" rgb2="0.3 0.35 0.4"/>
+    <material name="grid" texture="grid" texrepeat="8 8" reflectance="0.1"/>
+  </asset>
+
+  <worldbody>
+    <light pos="0 0 4" dir="0 0 -1" directional="true"/>
+    <geom name="floor" type="plane" size="0 0 0.05" material="grid"
+          contype="1" conaffinity="1" friction="1.0 0.02 0.001"/>
+
+    <!-- initial height set for the nominal crouch q=0.5 rad: 0.6*cos(0.5)+0.08 ≈ 0.607 -->
+    <body name="pelvis" pos="0 0 0.61">
+      <freejoint name="root"/>
+      <geom name="pelvis_geom" type="box" size="0.08 0.17 0.06" mass="6" rgba="0.1 0.4 0.8 1"/>
+      <site name="imu" pos="0 0 0" size="0.01"/>
+
+      <!-- stand-in for the torso/arms; mass + height randomized in training -->
+      <body name="upper_body" pos="0 0 0.15">
+        <geom name="upper_body_geom" type="box" size="0.06 0.12 0.09" mass="4"
+              rgba="0.1 0.4 0.8 0.35"/>
+      </body>
+
+      <!-- ===================== LEFT LEG ===================== -->
+      <body name="l_thigh" pos="0 0.15 0">
+        <joint name="l_hip" type="hinge" axis="0 1 0" range="-0.3 1.4"/>
+        <geom type="capsule" fromto="0 0 0 0 0 -0.3" size="0.035" mass="1.5"/>
+        <body name="l_shank" pos="0 0 -0.3">
+          <joint name="l_knee" type="hinge" axis="0 1 0" range="-2.6 0.0"/>
+          <geom type="capsule" fromto="0 0 0 0 0 -0.3" size="0.03" mass="1.0"/>
+          <body name="l_wheel" pos="0 0.035 -0.3">
+            <joint name="l_wheel" type="hinge" axis="0 1 0" class="wheel"/>
+            <geom class="wheel" mass="0.5"/>
+          </body>
+        </body>
+      </body>
+
+      <!-- ===================== RIGHT LEG ===================== -->
+      <body name="r_thigh" pos="0 -0.15 0">
+        <joint name="r_hip" type="hinge" axis="0 1 0" range="-0.3 1.4"/>
+        <geom type="capsule" fromto="0 0 0 0 0 -0.3" size="0.035" mass="1.5"/>
+        <body name="r_shank" pos="0 0 -0.3">
+          <joint name="r_knee" type="hinge" axis="0 1 0" range="-2.6 0.0"/>
+          <geom type="capsule" fromto="0 0 0 0 0 -0.3" size="0.03" mass="1.0"/>
+          <body name="r_wheel" pos="0 -0.035 -0.3">
+            <joint name="r_wheel" type="hinge" axis="0 1 0" class="wheel"/>
+            <geom class="wheel" mass="0.5"/>
+          </body>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+
+  <actuator>
+    <!-- order matters: the RL action vector follows this order -->
+    <position name="l_hip_act"  joint="l_hip"  class="leg_servo" ctrlrange="-0.3 1.4"/>
+    <position name="l_knee_act" joint="l_knee" class="leg_servo" ctrlrange="-2.6 0.0"/>
+    <position name="r_hip_act"  joint="r_hip"  class="leg_servo" ctrlrange="-0.3 1.4"/>
+    <position name="r_knee_act" joint="r_knee" class="leg_servo" ctrlrange="-2.6 0.0"/>
+    <motor name="l_wheel_act" joint="l_wheel" gear="1" ctrlrange="-8 8"/>
+    <motor name="r_wheel_act" joint="r_wheel" gear="1" ctrlrange="-8 8"/>
+  </actuator>
+
+  <sensor>
+    <framequat name="imu_quat" objtype="site" objname="imu"/>
+    <gyro name="imu_gyro" site="imu"/>
+    <accelerometer name="imu_acc" site="imu"/>
+    <framelinvel name="pelvis_linvel" objtype="site" objname="imu"/>
+  </sensor>
+
+  <keyframe>
+    <!-- nominal crouch: hip=0.5, knee=-1.0 -->
+    <key name="crouch"
+         qpos="0 0 0.607 1 0 0 0  0.5 -1.0 0  0.5 -1.0 0"
+         ctrl="0.5 -1.0 0.5 -1.0 0 0"/>
+  </keyframe>
+</mujoco>
