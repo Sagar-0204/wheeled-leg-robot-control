@@ -37,6 +37,7 @@ scripts/train.py          PPO training (Stable-Baselines3), curriculum, checkpoi
 scripts/play.py           drive the trained policy with the keyboard in the MuJoCo viewer
 scripts/record.py         scripted demo -> MP4/GIF + command-tracking plot
 scripts/evaluate.py       checkpoint selection + RL vs LQR evaluation (tables + plots)
+scripts/explore.py        inside the policy: live obs/actions/rewards, saliency, ablations
 results/                  plots
 ```
 
@@ -62,8 +63,8 @@ python scripts/sanity_check.py --view 5  # watch a test in the MuJoCo viewer
 ```bash
 python scripts/train.py                          # full run (30M steps)
 tensorboard --logdir runs                        # curves: rollout/ep_len_mean, metrics/*
-python scripts/play.py --run ppo_main            # drive it: arrows, PgUp/PgDn, P = push
-python scripts/record.py --run ppo_main --gif    # demo video + tracking plot
+python scripts/play.py --ckpt 21500000           # drive the included final model: arrows, PgUp/PgDn, P = push, Space = stop
+python scripts/record.py --ckpt 21500000 --gif   # demo video + tracking plot
 python scripts/play.py --lqr                     # classical baseline for comparison
 python scripts/evaluate.py --select              # rank checkpoints
 python scripts/evaluate.py --ckpt 21500000       # RL vs LQR evaluation
@@ -114,8 +115,11 @@ mean error 0.065 m/s forward speed, 0.074 rad/s yaw rate, 0.9 cm height.
 ### What the comparison does and does not show
 - For **forward/backward pushes only**, LQR is about as good as RL up to ~160 N, even with randomized
   dynamics (0-10% falls for both). The large gap above comes from **pushes from other directions**:
-  lateral/diagonal shoves excite yaw and roll, which the planar WIP model ignores. The RL policy learned
-  3D disturbance rejection using legs and differential wheel torque.
+  lateral/diagonal shoves excite yaw and roll, which the planar WIP model ignores.
+- **Ablation (legs frozen at the nominal crouch, 20 episodes per band):** at 80-120 N the policy still
+  never falls, so at moderate pushes the gain comes from the *learned wheel control* handling the
+  yaw/roll coupling. The legs matter for strong pushes: 120-160 N falls go 5% -> 30% and 160-200 N
+  30% -> 100% with legs frozen (`python scripts/explore.py ablate`).
 - A stronger classical design (yaw/roll control, whole-body MPC) would narrow the gap; the point here is
   that one learned policy gets this robustness without a hand-built model of the coupled dynamics.
 - Checkpoint 21.5M was chosen partly on push robustness measured with these tests (mild selection bias).
